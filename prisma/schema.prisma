@@ -1,9 +1,6 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -14,49 +11,121 @@ datasource db {
 }
 
 // --- Enums
+
 enum Role {
   USER
   ADMIN
 }
 
+enum GameStatus {
+  PLANNED      // créée mais pas encore confirmée
+  OPEN         // les gens peuvent rejoindre
+  FULL         // complet
+  IN_PROGRESS
+  FINISHED
+  CANCELED
+}
+
+enum Visibility {
+  PUBLIC
+  PRIVATE
+}
+
+enum GameLevel {
+  ANY
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+}
+
+enum ParticipationStatus {
+  PENDING      // demande en attente
+  CONFIRMED    // validé
+  CANCELED     // annulé par le joueur
+  KICKED       // viré par l’host
+}
+
+enum ParticipantRole {
+  PLAYER
+  SUBSTITUTE
+}
+
+enum NotificationType {
+  GAME_INVITE
+  GAME_STATUS_CHANGE
+  PARTICIPATION_REQUEST
+  PARTICIPATION_ACCEPTED
+  PARTICIPATION_REFUSED
+}
+
 // --- Models
+
 model User {
   id             Int           @id @default(autoincrement())
   prenom         String?
   nom            String?
+  pseudo         String?       @unique   // pour l’affichage dans l’app
   email          String        @unique
-  mdp            String
+  mdp            String        // hashé côté app
   dateNaissance  DateTime?
   dateCreation   DateTime      @default(now())
-  localisation   String?
+  localisation   String?       // à terme : relier à une table City ou coords
+  avatarUrl      String?       // photo de profil
+  bio            String?       // "Je joue surtout au foot en 5"
+
   role           Role          @default(USER)
 
   // Relations
-  gamesCreated   Game[]        @relation("UserHost")
+  gamesCreated   Game[]                @relation("UserHost")
   participations Participant[]
+  sports         UserSportPreference[]
+  notifications  Notification[]
+  messages       GameMessage[]
 }
 
 model Game {
   id            Int           @id @default(autoincrement())
+
+  // Type / sport
   sport         String
   typeId        Int?
   type          GameType?     @relation(fields: [typeId], references: [id], onDelete: SetNull, onUpdate: Cascade)
 
+  // Infos générales
+  title         String?       // "Bowling vendredi soir"
+  description   String?       // infos libres
+
   date          DateTime
+  durationMin   Int?          // ex : 60, 90...
+
+  // Localisation
   localisation  String?
+  venueId       Int?
+  venue         Venue?        @relation(fields: [venueId], references: [id], onDelete: SetNull)
 
   // Hôte (créateur de la partie)
   hostId        Int
   host          User          @relation("UserHost", fields: [hostId], references: [id], onDelete: Restrict, onUpdate: Cascade)
 
-  // Participants
+  // Config
+  maxPlayers    Int?                       // ex : 10 pour un five 5v5
+  pricePerUser  Decimal?     @db.Decimal(10, 2)
+  level         GameLevel    @default(ANY)
+  visibility    Visibility   @default(PUBLIC)
+  status        GameStatus   @default(OPEN)
+
+  // Relations
   participants  Participant[]
+  notifications Notification[]
+  messages      GameMessage[]
 
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 
   @@index([hostId])
   @@index([typeId])
+  @@index([venueId])
+  @@index([status])
 }
 
 model Participant {
@@ -64,17 +133,84 @@ model Participant {
   gameId    Int
   joinedAt  DateTime @default(now())
 
+  status    ParticipationStatus @default(CONFIRMED)
+  role      ParticipantRole     @default(PLAYER)
+
+  rating    Int?                // note donnée (1-5)
+  comment   String?             // optionnel
+
   user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
   game      Game @relation(fields: [gameId], references: [id], onDelete: Cascade)
 
-  @@id([userId, gameId]) // clé primaire composée pour éviter les doublons
+  @@id([userId, gameId])  // empêche les doublons user/game
   @@index([gameId])
 }
 
-// table de référence pour les sports prédéfinis
-model GameType {
-  id     Int    @id @default(autoincrement())
-  name   String @unique
+model Venue {
+  id          Int      @id @default(autoincrement())
+  name        String            // "Bowling La Valentine"
+  address     String?
+  city        String?
+  postalCode  String?
+  latitude    Float?
+  longitude   Float?
 
-  games  Game[]
+  phone       String?
+  website     String?
+  type        String?           // "BOWLING", "FIVE", "PADEL", etc.
+
+  games       Game[]
+
+  @@index([city])
 }
+
+model UserSportPreference {
+  id        Int       @id @default(autoincrement())
+  userId    Int
+  sportId   Int       // GameType.id
+  level     GameLevel @default(ANY)
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sport     GameType  @relation(fields: [sportId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, sportId])   // un niveau par sport et par user
+}
+
+model Notification {
+  id         Int               @id @default(autoincrement())
+  userId     Int
+  type       NotificationType
+  message    String
+  isRead     Boolean           @default(false)
+  createdAt  DateTime          @default(now())
+
+  gameId     Int?
+  game       Game?             @relation(fields: [gameId], references: [id], onDelete: SetNull)
+
+  user       User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+}
+
+model GameMessage {
+  id        Int      @id @default(autoincrement())
+  gameId    Int
+  authorId  Int
+  content   String
+  createdAt DateTime @default(now())
+
+  game      Game @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  author    User @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([gameId])
+  @@index([authorId])
+}
+
+model GameType {
+  id    Int    @id @default(autoincrement())
+  name  String @unique
+
+  games           Game[]
+  userPreferences UserSportPreference[]
+}
+// 

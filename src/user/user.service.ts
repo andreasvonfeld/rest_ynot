@@ -1,38 +1,48 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class UserService {
-  async getAllUsers() {
-    return prisma.user.findMany({
-      include: {
-        gamesCreated: true,
-        participations: true,
-      },
-    });
+  // 🔥 On déclare explicitement la propriété ici
+  private readonly prisma: PrismaService;
+
+  // 🔥 Puis on l'initialise dans le constructeur
+  constructor(prisma: PrismaService) {
+    this.prisma = prisma;
   }
 
-  async createUser(data: any) {
-    const { prenom, nom, email, mdp, dateNaissance, localisation, role } = data;
+  async findAll() {
+    return this.prisma.user.findMany();
+  }
 
-    // tu pourrais ici ajouter une validation basique
-    if (!email || !mdp) {
-      throw new Error('Email et mot de passe requis');
-    }
+  async create(data: any) {
+    return this.prisma.user.create({
+    data: {
+      prenom: data.prenom,
+      nom: data.nom,
+      pseudo: data.pseudo,
+      email: data.email,
+      mdp: data.mdp,
+      dateNaissance: data.dateNaissance ? new Date(data.dateNaissance) : null,
+      localisation: data.localisation,
+      avatarUrl: data.avatarUrl,
+      bio: data.bio,
+      role: data.role ?? 'USER',
+    },
+  });
+  }
 
-    // création dans la base
-    return prisma.user.create({
-      data: {
-        prenom,
-        nom,
-        email,
-        mdp, // pense à le hasher avant en vrai projet
-        dateNaissance: dateNaissance ? new Date(dateNaissance) : undefined,
-        localisation,
-        role,
-      },
-    });
+async findOne(id: number) {
+  return this.prisma.user.findUnique({
+    where: { id },
+  });
+}
+
+  update(id: number, data: any) {
+    return `Update user #${id}`;
+  }
+
+  remove(id: number) {
+    return `Remove user #${id}`;
   }
 }
