@@ -1,0 +1,80 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// --- Enums
+enum Role {
+  USER
+  ADMIN
+}
+
+// --- Models
+model User {
+  id             Int           @id @default(autoincrement())
+  prenom         String?
+  nom            String?
+  email          String        @unique
+  mdp            String
+  dateNaissance  DateTime?
+  dateCreation   DateTime      @default(now())
+  localisation   String?
+  role           Role          @default(USER)
+
+  // Relations
+  gamesCreated   Game[]        @relation("UserHost")
+  participations Participant[]
+}
+
+model Game {
+  id            Int           @id @default(autoincrement())
+  sport         String
+  typeId        Int?
+  type          GameType?     @relation(fields: [typeId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  date          DateTime
+  localisation  String?
+
+  // Hôte (créateur de la partie)
+  hostId        Int
+  host          User          @relation("UserHost", fields: [hostId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  // Participants
+  participants  Participant[]
+
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([hostId])
+  @@index([typeId])
+}
+
+model Participant {
+  userId    Int
+  gameId    Int
+  joinedAt  DateTime @default(now())
+
+  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  game      Game @relation(fields: [gameId], references: [id], onDelete: Cascade)
+
+  @@id([userId, gameId]) // clé primaire composée pour éviter les doublons
+  @@index([gameId])
+}
+
+// table de référence pour les sports prédéfinis
+model GameType {
+  id     Int    @id @default(autoincrement())
+  name   String @unique
+
+  games  Game[]
+}
