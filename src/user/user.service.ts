@@ -3,10 +3,8 @@ import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class UserService {
-  // 🔥 On déclare explicitement la propriété ici
   private readonly prisma: PrismaService;
 
-  // 🔥 Puis on l'initialise dans le constructeur
   constructor(prisma: PrismaService) {
     this.prisma = prisma;
   }
@@ -15,34 +13,47 @@ export class UserService {
     return this.prisma.user.findMany();
   }
 
+  async findOne(id: number) {
+    return this.prisma.user.findUnique({ where: { id } });
+  }
+
+  async findByEmail(email: string) {
+    return this.prisma.user.findUnique({ where: { email } });
+  }
+
   async create(data: any) {
     return this.prisma.user.create({
-    data: {
-      prenom: data.prenom,
-      nom: data.nom,
-      pseudo: data.pseudo,
-      email: data.email,
-      mdp: data.mdp,
-      dateNaissance: data.dateNaissance ? new Date(data.dateNaissance) : null,
-      localisation: data.localisation,
-      avatarUrl: data.avatarUrl,
-      bio: data.bio,
-      role: data.role ?? 'USER',
-    },
-  });
+      data: {
+        prenom: data.prenom,
+        nom: data.nom,
+        pseudo: data.pseudo,
+        email: data.email,
+        mdp: data.mdp, // à remplacer par hash bcrypt après
+        dateNaissance: data.dateNaissance ? new Date(data.dateNaissance) : null,
+        localisation: data.localisation,
+        avatarUrl: data.avatarUrl,
+        bio: data.bio,
+        role: data.role ?? 'USER',
+      },
+    });
   }
 
-async findOne(id: number) {
-  return this.prisma.user.findUnique({
-    where: { id },
-  });
-}
-
-  update(id: number, data: any) {
-    return `Update user #${id}`;
+  async update(id: number, data: any) {
+    return this.prisma.user.update({
+      where: { id },
+      data: {
+        prenom: data.prenom,
+        nom: data.nom,
+        pseudo: data.pseudo,
+        email: data.email,
+        localisation: data.localisation,
+        avatarUrl: data.avatarUrl,
+        bio: data.bio,
+      },
+    });
   }
 
-  remove(id: number) {
-    return `Remove user #${id}`;
+  async remove(id: number) {
+    return this.prisma.user.delete({ where: { id } });
   }
 }
