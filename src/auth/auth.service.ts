@@ -10,25 +10,32 @@ export class AuthService {
     private readonly jwtService: JwtService,
   ) {}
 
-  async validateUser(email: string, password: string) {
-    const user = await this.usersService.findByEmail(email);
-    if (!user) {
-      throw new UnauthorizedException('Identifiants invalides');
-    }
+  async login(email: string, password: string) {
+  const user = await this.usersService.findByEmail(email);
 
+  if (!user) {
+    throw new UnauthorizedException('Identifiants invalides');
+  }
+
+  try {
     const isValid = await bcrypt.compare(password, user.mdp);
     if (!isValid) {
       throw new UnauthorizedException('Identifiants invalides');
     }
-
-    const { mdp, ...safeUser } = user;
-    return safeUser;
+  } catch (e) {
+    // Cas où user.mdp n'est PAS un hash bcrypt valide
+    throw new UnauthorizedException('Identifiants invalides');
   }
 
-  async login(user: any) {
-    const payload = { sub: user.id, email: user.email };
-    return {
-      access_token: this.jwtService.sign(payload),
-    };
-  }
+  const payload = {
+    sub: user.id,
+    email: user.email,
+    pseudo: user.pseudo,
+    role: user.role,
+  };
+
+  return {
+    access_token: this.jwtService.sign(payload),
+  };
+}
 }

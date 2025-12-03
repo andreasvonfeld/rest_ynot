@@ -1,7 +1,10 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Req, ForbiddenException } from '@nestjs/common';
 import { UserService } from './user.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+
+
 
 @Controller('user')
 export class UserController {
@@ -27,8 +30,17 @@ export class UserController {
     return this.userService.update(+id, updateUserDto);
   }
 
+ @UseGuards(JwtAuthGuard)
   @Delete(':id')
-  remove(@Param('id') id: string) {
+  remove(@Param('id') id: string, @Req() req: any) {
+    console.log('req.user =', req.user);
+
+    // Protection ADMIN uniquement
+    const role = String(req.user?.role ?? '').toLowerCase();
+    if (role !== 'admin') {
+      throw new ForbiddenException('Accès réservé aux administrateurs.');
+    }
+
     return this.userService.remove(+id);
   }
 }

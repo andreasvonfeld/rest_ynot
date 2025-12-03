@@ -1,5 +1,6 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class UserService {
@@ -22,21 +23,27 @@ export class UserService {
   }
 
   async create(data: any) {
-    return this.prisma.user.create({
-      data: {
-        prenom: data.prenom,
-        nom: data.nom,
-        pseudo: data.pseudo,
-        email: data.email,
-        mdp: data.mdp, // à remplacer par hash bcrypt après
-        dateNaissance: data.dateNaissance ? new Date(data.dateNaissance) : null,
-        localisation: data.localisation,
-        avatarUrl: data.avatarUrl,
-        bio: data.bio,
-        role: data.role ?? 'USER',
-      },
-    });
-  }
+  const hashedPassword = await bcrypt.hash(data.mdp, 10);
+
+  const user = await this.prisma.user.create({
+    data: {
+      prenom: data.prenom,
+      nom: data.nom,
+      pseudo: data.pseudo,
+      email: data.email,
+      mdp: hashedPassword,  // 👈 HASH ICI
+      dateNaissance: data.dateNaissance ? new Date(data.dateNaissance) : null,
+      localisation: data.localisation,
+      avatarUrl: data.avatarUrl,
+      bio: data.bio,
+      role: data.role ?? 'USER',
+    },
+  });
+
+  // On ne renvoie pas le hash
+  const { mdp, ...safeUser } = user;
+  return safeUser;
+}
 
   async update(id: number, data: any) {
     return this.prisma.user.update({
@@ -54,6 +61,23 @@ export class UserService {
   }
 
   async remove(id: number) {
-    return this.prisma.user.delete({ where: { id } });
+    try {
+      // si relations à supprimer avant (ex: posts, comments), supprimer d'abord :
+      // await this.prisma.post.deleteMany({ where: { authorId: id } });
+
+      const user = await this.prisma.user.delete({ where: { id } });
+      return { message: 'User deleted', user };
+    } catch (err: any) {
+      // Prisma error codes:
+      // P2025 -> Record to delete does not exist
+      // P2003 -> Foreign key constraint failed on delete
+      if (err.code === 'P2025') {
+        throw new NotFoundException('User not found');
+      }
+      if (err.code === 'P2003') {
+        throw new BadRequestException('Cannot delete user: related records exist. Remove relations or enable cascade.');
+      }
+      throw err;
+    }
   }
 }
